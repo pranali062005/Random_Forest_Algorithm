@@ -1,180 +1,224 @@
 import pickle
 import numpy as np
+import pandas as pd
 from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# Load the trained model from model.pkl
-MODEL_PATH = "RandomForest.pkl"
+# Load the trained RandomForest model
 try:
-    with open(MODEL_PATH, "rb") as f:
+    with open('RandomForest.pkl', 'rb') as f:
         model = pickle.load(f)
-    print("Model loaded successfully!")
 except Exception as e:
     print(f"Error loading model: {e}")
-    model = None
 
-# HTML Template with an attractive, responsive Tailwind CSS layout
+# HTML template embedded directly so you don't need a templates folder
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Layoff & AI Impact Predictor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Random Forest Prediction Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            color: #f8fafc;
+            min-height: 100vh;
+            padding: 40px 0;
+        }
+        .card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+        }
+        .form-control {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            color: #fff;
+        }
+        .form-control:focus {
+            background-color: #0f172a;
+            color: #fff;
+            border-color: #6366f1;
+        }
+        label {
+            color: #94a3b8;
+            font-weight: 500;
+        }
+        .btn-custom {
+            background: #6366f1;
+            border: none;
+            font-weight: 600;
+        }
+        .btn-custom:hover {
+            background: #4f46e5;
+        }
+    </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between">
-    <div class="container mx-auto px-4 py-8 max-w-4xl">
-        <!-- Header -->
-        <header class="text-center mb-10">
-            <h1 class="text-4xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500 mb-2">
-                Corporate Risk & Layoff Predictor
-            </h1>
-            <p class="text-slate-400 text-sm">Powered by your Scikit-Learn Random Forest Classifier & Flask</p>
-        </header>
-
-        <!-- Main Card -->
-        <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-6 md:p-8">
-            <form method="POST" class="space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
-                    <!-- Numerical Inputs -->
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">Layoffs Count</label>
-                        <input type="number" name="layoffs_count" required value="150"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">Layoff Percentage (%)</label>
-                        <input type="number" step="0.1" name="layoff_percentage" required value="15.0"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">AI Replacement Risk (0-1)</label>
-                        <input type="number" step="0.01" name="ai_replacement_risk" required value="0.45"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">Remote Jobs Percentage (%)</label>
-                        <input type="number" step="0.1" name="remote_jobs_percentage" required value="30.0"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">Stock Growth Percent (%)</label>
-                        <input type="number" step="0.1" name="stock_growth_percent" required value="5.2"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">Revenue Growth Percent (%)</label>
-                        <input type="number" step="0.1" name="revenue_growth_percent" required value="2.1"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">Job Security Score (0-100)</label>
-                        <input type="number" step="0.1" name="job_security_score" required value="65.0"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">Company Size (Encoded/Numeric)</label>
-                        <input type="number" name="company_size" required value="2"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="text-center mb-4">
+                    <h1 class="fw-bold text-white">Workforce & Layoff Risk Predictor</h1>
+                    <p class="text-muted">Enter company data to evaluate predictions using Random Forest</p>
                 </div>
 
-                <!-- Hidden or placeholder fields for categorical attributes expected by pipeline/model features -->
-                <!-- Note: Adjust these default categorical mapping fields depending on how your preprocessor handles categorical data -->
-                <input type="hidden" name="company_name" value="0">
-                <input type="hidden" name="industry" value="0">
-                <input type="hidden" name="country" value="0">
-                <input type="hidden" name="month" value="6">
-                <input type="hidden" name="year" value="2026">
-                <input type="hidden" name="reason_for_layoffs" value="0">
-                <input type="hidden" name="ai_automation_impact" value="0">
-                <input type="hidden" name="open_roles" value="5">
-                <input type="hidden" name="hiring_trend" value="1">
-                <input type="hidden" name="top_hiring_role" value="0">
-                <input type="hidden" name="salary_budget_change" value="0">
-                <input type="hidden" name="ai_adoption_level" value="1">
-                <input type="hidden" name="employee_sentiment" value="3">
+                <div class="card p-4 p-md-5">
+                    <form action="/predict" method="POST">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Company Name</label>
+                                <input type="text" class="form-control" name="company_name" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Industry</label>
+                                <input type="text" class="form-control" name="industry" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Country</label>
+                                <input type="text" class="form-control" name="country" required>
+                            </div>
 
-                <!-- Submit Button -->
-                <div class="mt-8">
-                    <button type="submit" 
-                        class="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-lg shadow-lg transition duration-200 transform hover:-translate-y-0.5">
-                        Run Model Prediction
-                    </button>
+                            <div class="col-md-4">
+                                <label class="form-label">Company Size</label>
+                                <input type="text" class="form-control" name="company_size" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Month (1-12)</label>
+                                <input type="number" class="form-control" name="month" value="1" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Year</label>
+                                <input type="number" class="form-control" name="year" value="2026" required>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Layoffs Count</label>
+                                <input type="number" step="any" class="form-control" name="layoffs_count" value="0">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Layoff Percentage</label>
+                                <input type="number" step="any" class="form-control" name="layoff_percentage" value="0.0">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Open Roles</label>
+                                <input type="number" step="any" class="form-control" name="open_roles" value="0">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Reason for Layoffs</label>
+                                <input type="text" class="form-control" name="reason_for_layoffs">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">AI Automation Impact</label>
+                                <input type="text" class="form-control" name="ai_automation_impact">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">AI Replacement Risk</label>
+                                <input type="text" class="form-control" name="ai_replacement_risk">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Hiring Trend</label>
+                                <input type="text" class="form-control" name="hiring_trend">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Remote Jobs Percentage</label>
+                                <input type="number" step="any" class="form-control" name="remote_jobs_percentage" value="0.0">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Top Hiring Role</label>
+                                <input type="text" class="form-control" name="top_hiring_role">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Stock Growth Percent</label>
+                                <input type="number" step="any" class="form-control" name="stock_growth_percent" value="0.0">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Revenue Growth Percent</label>
+                                <input type="number" step="any" class="form-control" name="revenue_growth_percent" value="0.0">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Salary Budget Change</label>
+                                <input type="text" class="form-control" name="salary_budget_change">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">AI Adoption Level</label>
+                                <input type="text" class="form-control" name="ai_adoption_level">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Employee Sentiment</label>
+                                <input type="text" class="form-control" name="employee_sentiment">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Job Security Score</label>
+                                <input type="number" step="any" class="form-control" name="job_security_score" value="0.0">
+                            </div>
+
+                            <div class="col-12 mt-4">
+                                <button type="submit" class="btn btn-custom btn-lg text-white w-100">Predict</button>
+                            </div>
+                        </div>
+                    </form>
+
+                    {% if prediction_text %}
+                    <div class="alert alert-info mt-4 text-center fw-bold fs-5 bg-dark border-0 shadow" style="color: #818cf8 !important;">
+                        {{ prediction_text }}
+                    </div>
+                    {% endif %}
                 </div>
-            </form>
-
-            <!-- Results Section -->
-            {% if prediction is not none %}
-            <div class="mt-8 p-6 bg-slate-900 border {% if prediction == 1 %}border-red-500/50 bg-red-950/20{% else %}border-emerald-500/50 bg-emerald-950/20{% endif %} rounded-xl text-center">
-                <h3 class="text-lg font-semibold text-slate-300 mb-1">Prediction Result</h3>
-                <p class="text-3xl font-bold {% if prediction == 1 %}text-red-400{% else %}text-emerald-400{% endif %}">
-                    {% if prediction == 1 %} High Risk / Positive Class Detected {% else %} Low Risk / Negative Class Detected {% endif %}
-                </p>
-                <p class="text-xs text-slate-400 mt-2">Raw Model Output Code: {{ prediction }}</p>
             </div>
-            {% endif %}
         </div>
     </div>
-
-    <!-- Footer -->
-    <footer class="text-center py-6 text-slate-500 text-xs">
-        Deployed on Render • Flask Web Application
-    </footer>
 </body>
 </html>
 """
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    prediction = None
-    if request.method == "POST":
-        try:
-            # Extract numerical parameters from form matching model's expected 21 features order
-            features = [
-                float(request.form.get("company_name", 0)),
-                float(request.form.get("industry", 0)),
-                float(request.form.get("country", 0)),
-                float(request.form.get("company_size", 0)),
-                float(request.form.get("month", 0)),
-                float(request.form.get("year", 0)),
-                float(request.form.get("layoffs_count", 0)),
-                float(request.form.get("layoff_percentage", 0)),
-                float(request.form.get("reason_for_layoffs", 0)),
-                float(request.form.get("ai_automation_impact", 0)),
-                float(request.form.get("ai_replacement_risk", 0)),
-                float(request.form.get("open_roles", 0)),
-                float(request.form.get("hiring_trend", 0)),
-                float(request.form.get("remote_jobs_percentage", 0)),
-                float(request.form.get("top_hiring_role", 0)),
-                float(request.form.get("stock_growth_percent", 0)),
-                float(request.form.get("revenue_growth_percent", 0)),
-                float(request.form.get("salary_budget_change", 0)),
-                float(request.form.get("ai_adoption_level", 0)),
-                float(request.form.get("employee_sentiment", 0)),
-                float(request.form.get("job_security_score", 0))
-            ]
-            
-            if model:
-                # Reshape for single sample prediction
-                input_data = np.array([features])
-                pred = model.predict(input_data)
-                prediction = int(pred[0])
-        except Exception as e:
-            print(f"Prediction error: {e}")
+@app.route('/')
+def home():
+    return render_template_string(HTML_TEMPLATE)
 
-    return render_template_string(HTML_TEMPLATE, prediction=prediction)
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        form_data = request.form
+        
+        data = {
+            'company_name': [form_data.get('company_name', '')],
+            'industry': [form_data.get('industry', '')],
+            'country': [form_data.get('country', '')],
+            'company_size': [form_data.get('company_size', '')],
+            'month': [float(form_data.get('month', 1))],
+            'year': [float(form_data.get('year', 2026))],
+            'layoffs_count': [float(form_data.get('layoffs_count', 0))],
+            'layoff_percentage': [float(form_data.get('layoff_percentage', 0.0))],
+            'reason_for_layoffs': [form_data.get('reason_for_layoffs', '')],
+            'ai_automation_impact': [form_data.get('ai_automation_impact', '')],
+            'ai_replacement_risk': [form_data.get('ai_replacement_risk', '')],
+            'open_roles': [float(form_data.get('open_roles', 0))],
+            'hiring_trend': [form_data.get('hiring_trend', '')],
+            'remote_jobs_percentage': [float(form_data.get('remote_jobs_percentage', 0.0))],
+            'top_hiring_role': [form_data.get('top_hiring_role', '')],
+            'stock_growth_percent': [float(form_data.get('stock_growth_percent', 0.0))],
+            'revenue_growth_percent': [float(form_data.get('revenue_growth_percent', 0.0))],
+            'salary_budget_change': [form_data.get('salary_budget_change', '')],
+            'ai_adoption_level': [form_data.get('ai_adoption_level', '')],
+            'employee_sentiment': [form_data.get('employee_sentiment', '')],
+            'job_security_score': [float(form_data.get('job_security_score', 0.0))]
+        }
+        
+        df = pd.DataFrame(data)
+        prediction = model.predict(df)[0]
+        
+        return render_template_string(HTML_TEMPLATE, prediction_text=f"Prediction Result: {prediction}")
+    
+    except Exception as e:
+        return render_template_string(HTML_TEMPLATE, prediction_text=f"Error during prediction: {str(e)}")
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+if __name__ == '__main__':
+    app.run(debug=True)
